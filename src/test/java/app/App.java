@@ -4,6 +4,8 @@ import java.util.List;
 
 import org.w3c.dom.Node;
 
+import com.github.ahoffer.Xman;
+
 public class App {
     public static String xmlString =
             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" + "<!-- /**\n"
@@ -29,14 +31,14 @@ public class App {
                     + "    <csw:DistributedSearch hopCount=\"2\"/>\n" + "</csw:GetRecords>";
 
     public static void main(String args[]) {
-        Xman xman = Xman.newInstance()
-                .setXmlText(xmlString);
-        xman.setXpathText("/GetRecords");
-        String out = xman.evaluateToString();
-        List<Node> nodes = xman.evaluateToNodes();
-        xman.setXpathText("/csw:GetRecords/");
-        out = xman.evaluateToString();
-        nodes = xman.evaluateToNodes();
+//        Xman xman = Xman.newInstance()
+//                .setXmlText(xmlString);
+//        xman.setXpathText("/GetRecords");
+//        String out = xman.evaluateToString();
+//        List<Node> nodes = xman.evaluateToNodes();
+//        xman.setXpathText("/csw:GetRecords/");
+//        out = xman.evaluateToString();
+//        nodes = xman.evaluateToNodes();
     }
 }
 

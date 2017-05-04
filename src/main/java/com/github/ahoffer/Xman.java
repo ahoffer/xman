@@ -1,8 +1,10 @@
-package app;
+package com.github.ahoffer;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.StringReader;
+import java.io.InputStream;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,7 +28,8 @@ import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 public class Xman {
-    private String xml;
+
+    private InputStream xmlStream;
 
     private boolean automaticRetry = true;
 
@@ -40,6 +43,16 @@ public class Xman {
         return new Xman();
     }
 
+    public static Xman from(String xml) {
+        return from(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    public static Xman from(InputStream xmlStream) {
+        Xman xman = newInstance();
+        xman.xmlStream = xmlStream;
+        return xman;
+    }
+
     DocumentBuilderFactory getDocumentBuilderFactory() throws ParserConfigurationException {
         DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
         builderFactory.setNamespaceAware(isNamespaceAware);
@@ -51,7 +64,6 @@ public class Xman {
         return builderFactory;
     }
 
-  
     DocumentBuilder getDocumentBuilder() throws ParserConfigurationException {
         DocumentBuilder builder = getDocumentBuilderFactory().newDocumentBuilder();
         builder.setErrorHandler(null);
@@ -76,7 +88,7 @@ public class Xman {
     }
 
     public InputSource asInputSource() {
-        return new InputSource(new StringReader(xml));
+        return new InputSource(xmlStream);
 
     }
 
@@ -109,15 +121,6 @@ public class Xman {
 
     public Xman setXpathText(String xpath) {
         this.xpath = xpath;
-        return this;
-    }
-
-    public String getXmlText() {
-        return xml;
-    }
-
-    public Xman setXmlText(String xml) {
-        this.xml = xml;
         return this;
     }
 

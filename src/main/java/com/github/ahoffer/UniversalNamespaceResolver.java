@@ -1,4 +1,4 @@
-package app;
+package com.github.ahoffer;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -24,15 +24,13 @@ public class UniversalNamespaceResolver implements NamespaceContext {
 
     public static final String xmlns = XMLConstants.XMLNS_ATTRIBUTE;
 
-    public static final String w3cUri = XMLConstants.XMLNS_ATTRIBUTE_NS_URI;
-
     public static final String PREFIX_DELIMITER = ":";
 
     private static final String UNKNOWN_NS = "UNKNOWN_NAME_SPACE";
 
-    private Map<String, String> prefix2Uri = new HashMap<String, String>();
+    private Map<String, String> prefix2Uri = new HashMap<>();
 
-    private Map<String, String> uri2Prefix = new HashMap<String, String>();
+    private Map<String, String> uri2Prefix = new HashMap<>();
 
     /**
      * This constructor parses the document and stores all namespaces it can
