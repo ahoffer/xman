@@ -1,2 +1,2 @@
 # xman
-A simple facade to simplify working with XPath in Java
+A simple facade for working with XPath in Java
