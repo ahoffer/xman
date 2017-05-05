@@ -40,8 +40,9 @@ public class UniversalNamespaceResolver implements NamespaceContext {
      */
     public UniversalNamespaceResolver(Document document) {
         examineNode(document.getDocumentElement());
-        for (String key : prefix2Uri.keySet()) {
-            System.out.println("prefix " + key + ": uri " + prefix2Uri.get(key));
+        for (Map.Entry<String, String> entry : prefix2Uri.entrySet()) {
+            System.out.println(
+                    "prefix " + entry.getKey() + ": uri " + prefix2Uri.get(entry.getKey()));
         }
     }
 

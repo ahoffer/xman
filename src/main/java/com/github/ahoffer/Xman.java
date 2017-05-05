@@ -1,35 +1,42 @@
 package com.github.ahoffer;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import javax.xml.namespace.NamespaceContext;
-import javax.xml.namespace.QName;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 
+import org.apache.commons.io.IOUtils;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-import org.w3c.dom.ls.DOMImplementationLS;
-import org.w3c.dom.ls.LSOutput;
-import org.w3c.dom.ls.LSSerializer;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 public class Xman {
 
-    private InputStream xmlStream;
+    private String xmlText;
 
     private boolean automaticRetry = true;
 
@@ -37,20 +44,24 @@ public class Xman {
 
     private boolean isValidating = false;
 
-    private String xpath;
+    private String resultSeparator = " <!----------Next Result---------->";
+
+    private String currentQuery;
+
+    private List<Node> results = new ArrayList<>();
 
     public static Xman newInstance() {
         return new Xman();
     }
 
     public static Xman from(String xml) {
-        return from(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
+        Xman xman = Xman.newInstance();
+        xman.xmlText = xml;
+        return xman;
     }
 
-    public static Xman from(InputStream xmlStream) {
-        Xman xman = newInstance();
-        xman.xmlStream = xmlStream;
-        return xman;
+    public static Xman from(InputStream xmlStream) throws IOException {
+        return Xman.from(IOUtils.toString(xmlStream, UTF_8));
     }
 
     DocumentBuilderFactory getDocumentBuilderFactory() throws ParserConfigurationException {
@@ -79,31 +90,46 @@ public class Xman {
         return document;
     }
 
-    public Document asDocument() {
-        try {
-            return getDocument();
-        } catch (ParserConfigurationException | IOException | SAXException e) {
-            return null;
-        }
-    }
-
     public InputSource asInputSource() {
-        return new InputSource(xmlStream);
+        return new InputSource(new ByteArrayInputStream(xmlText.getBytes(UTF_8)));
 
     }
 
-    public String asPrettyString() throws IOException, SAXException, ParserConfigurationException {
+    public Optional<String> asPrettyStringInput() {
+        Document document = null;
+        try {
+            document = getDocument();
+        } catch (ParserConfigurationException | IOException | SAXException e) {
+            //Throw away the exception
+            return Optional.empty();
+        }
+        return Optional.of(getPrettyString(document));
+    }
 
-        Document document = getDocument();
-        StringWriter stringOut = new StringWriter();
-        DOMImplementationLS domImpl = (DOMImplementationLS) document.getImplementation();
-        LSSerializer serializer = domImpl.createLSSerializer();
-        LSOutput lsOut = domImpl.createLSOutput();
-        lsOut.setEncoding("UTF-8");
-        lsOut.setCharacterStream(stringOut);
-        serializer.write(document, lsOut);
-        return stringOut.toString();
+    public String asPrettyStringResults() {
+        return asResults().map(list -> list.stream()
+                .map(Node::getOwnerDocument)
+                .map(this::getPrettyString)
+                .collect(Collectors.joining(resultSeparator)))
+                .get();
+    }
 
+    protected String getPrettyString(Document document) {
+        String output = "";
+        try {
+            TransformerFactory transformerFactory = TransformerFactory.newInstance();
+            Transformer transformer = transformerFactory.newTransformer();
+            transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+            StringWriter stringWriter = new StringWriter();
+            StreamResult result = new StreamResult(stringWriter);
+            DOMSource source = new DOMSource(document);
+            transformer.transform(source, result);
+            output = stringWriter.toString();
+        } catch (TransformerException e) {
+            throw new RuntimeException(e);
+        }
+        return output;
     }
 
     NamespaceContext getNamespaceResolver()
@@ -111,7 +137,7 @@ public class Xman {
         return new UniversalNamespaceResolver(getDocument());
     }
 
-    XPath getXpath() throws ParserConfigurationException, SAXException, IOException {
+    XPath getXpathQuueryString() throws ParserConfigurationException, SAXException, IOException {
 
         XPathFactory xpathFactory = XPathFactory.newInstance();
         XPath xpath = xpathFactory.newXPath();
@@ -119,44 +145,60 @@ public class Xman {
         return xpath;
     }
 
-    public Xman setXpathText(String xpath) {
-        this.xpath = xpath;
-        return this;
-    }
-
-    public String evaluateToString() {
-        boolean useNamespaces = isNamespaceAware;
-        String string = (String) evaluateAs(XPathConstants.STRING, useNamespaces);
-        if (string == null || string.isEmpty()) {
-            string = (String) evaluateAs(XPathConstants.STRING, !useNamespaces);
-        }
-        return string;
-    }
-
-    public List<Node> evaluateToNodes() {
+    public Xman evaluate(String queryString) {
+        currentQuery = queryString;
         boolean namespaceAware = isNamespaceAware;
-        NodeList nodes = (NodeList) evaluateAs(XPathConstants.NODESET, namespaceAware);
+        NodeList nodes = (NodeList) evaluate();
         if (automaticRetry && nodes.getLength() == 0) {
-            nodes = (NodeList) evaluateAs(XPathConstants.NODESET, !namespaceAware);
+            toggleNamespaceAwareness();
+            nodes = (NodeList) evaluate();
         }
         List<Node> list = new ArrayList<>();
         for (int i = 0; i < nodes.getLength(); i++) {
             list.add(nodes.item(i));
         }
-        return list;
+        setResults(list);
+        return this;
     }
 
-    private Object evaluateAs(QName xpathConstant, boolean useNamespaces) {
+    protected void toggleNamespaceAwareness() {
+        isNamespaceAware = !isNamespaceAware;
+    }
+
+    private Object evaluate() {
         boolean originalValue = isNamespaceAware;
         try {
-            isNamespaceAware = useNamespaces;
-            return getXpath().evaluate(xpath, asDocument(), xpathConstant);
+            return getXpathQuueryString().evaluate(currentQuery,
+                    getDocument(),
+                    XPathConstants.NODESET);
 
         } catch (XPathExpressionException | ParserConfigurationException | IOException | SAXException e) {
             throw new RuntimeException(e);
         } finally {
             isNamespaceAware = originalValue;
         }
+    }
+
+    public Optional<Node> asFirstResult() {
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    public Optional<List<Node>> asResults() {
+        return results.isEmpty() ? Optional.empty() : Optional.of(results);
+    }
+
+    protected void setResults(List<Node> results) {
+        this.results = results;
+    }
+
+    public Xman mutateFirstResult(Consumer<Node> consumer) {
+        asFirstResult().ifPresent(n -> consumer.accept(n));
+        return this;
+    }
+
+    public Xman mutateResults(Consumer<List<Node>> consumer) {
+        asResults().ifPresent(ns -> consumer.accept(ns));
+        return this;
     }
 
 
